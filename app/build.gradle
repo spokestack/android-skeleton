@@ -1,0 +1,84 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
+
+// Spokestack uses native libraries via JNI to process microphone input, so this
+// dependency is required
+apply plugin: 'android-native-dependencies'
+native_dependencies {
+    artifact 'io.spokestack:spokestack-android:5.0.0'
+}
+
+android {
+    // substitute with your installed version
+    ndkVersion "21.0.6113669"
+    compileSdkVersion 29
+    buildToolsVersion "29.0.2"
+
+    // necessary for some Java 8 syntax used by Spokestack and dependencies
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        applicationId "io.spokestack.skeleton"
+        minSdkVersion 21
+        targetSdkVersion 29
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    packagingOptions {
+        merge '/LICENSE'
+        merge '/LICENSE.txt'
+        merge '/license.txt'
+        exclude 'META-INF/DEPENDENCIES'
+        exclude 'META-INF/INDEX.LIST'
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    implementation 'androidx.appcompat:appcompat:1.1.0'
+    implementation 'androidx.core:core-ktx:1.1.0'
+    implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
+
+    // base Spokestack dependency
+    implementation 'io.spokestack:spokestack-android:5.0.0'
+
+    // Note: This project includes the optional dependencies required to use every external
+    // service provider supported by Spokestack at the time of writing. They're labeled by
+    // service provider/component below; omit any dependencies for components you don't need.
+    // Also be sure to check for new versions of these dependencies.
+
+    // automatic tts playback (via a Spokestack-managed ExoPlayer)
+    implementation 'androidx.lifecycle:lifecycle-common-java8:2.2.0'
+    implementation 'androidx.media:media:1.1.0'
+    implementation 'com.google.android.exoplayer:exoplayer-core:2.11.0'
+
+    // Google Cloud Speech
+    implementation 'com.google.cloud:google-cloud-speech:1.22.2'
+    implementation 'io.grpc:grpc-okhttp:1.25.0'
+
+    // Azure ASR
+    implementation 'com.microsoft.cognitiveservices.speech:client-sdk:1.9.0'
+
+    // TFLite wakeword
+    // Note: stick with a pre-2.0 TensorFlow version for now
+    implementation 'org.tensorflow:tensorflow-lite:1.14.0'
+}
+

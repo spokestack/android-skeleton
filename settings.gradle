@@ -1,0 +1,2 @@
+rootProject.name='Spokestack Skeleton'
+include ':app'

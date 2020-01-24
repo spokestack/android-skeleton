@@ -1,0 +1,4 @@
+/build
+
+# wakeword models
+*.lite
