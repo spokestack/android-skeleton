@@ -11,10 +11,13 @@ import androidx.core.content.ContextCompat
 import io.spokestack.spokestack.OnSpeechEventListener
 import io.spokestack.spokestack.SpeechContext
 import io.spokestack.spokestack.SpeechPipeline
+import io.spokestack.spokestack.nlu.TraceListener
+import io.spokestack.spokestack.nlu.tensorflow.TensorflowNLU
 import io.spokestack.spokestack.tts.SynthesisRequest
 import io.spokestack.spokestack.tts.TTSEvent
 import io.spokestack.spokestack.tts.TTSListener
 import io.spokestack.spokestack.tts.TTSManager
+import io.spokestack.spokestack.util.EventTracer
 import java.io.File
 import java.io.FileOutputStream
 
@@ -23,7 +26,7 @@ private const val PREF_NAME = "AppPrefs"
 private const val versionKey = "versionCode"
 private const val nonexistent = -1
 
-class MainActivity : AppCompatActivity(), OnSpeechEventListener, TTSListener {
+class MainActivity : AppCompatActivity(), OnSpeechEventListener, TTSListener, TraceListener {
     private val logTag = javaClass.simpleName
 
     // a sentinel value we'll use to verify we have the proper permissions to use Spokestack to
@@ -33,6 +36,7 @@ class MainActivity : AppCompatActivity(), OnSpeechEventListener, TTSListener {
     // Spokestack's main subsystems; you might not want them directly in your activity, but
     // you will need to provide your application `Context` for certain features
     private var pipeline: SpeechPipeline? = null
+    private var nlu: TensorflowNLU? = null
     private var tts: TTSManager? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,6 +47,9 @@ class MainActivity : AppCompatActivity(), OnSpeechEventListener, TTSListener {
         if (this.pipeline == null && checkMicPermission()) {
             buildPipeline()
         }
+        // you'll need NLU models to use this component; see the README for more information on
+        // obtaining them
+        buildNLU()
         buildTTS()
     }
 
@@ -50,16 +57,12 @@ class MainActivity : AppCompatActivity(), OnSpeechEventListener, TTSListener {
         // On API levels >= 23, users can revoke permissions at any time, and API levels >= 26
         // require the RECORD_AUDIO permission to be requested at runtime, so we'll need
         // to verify it on launch
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            == PackageManager.PERMISSION_GRANTED
-        ) {
+        val recordPerm = Manifest.permission.RECORD_AUDIO
+        val granted = PackageManager.PERMISSION_GRANTED
+        if (ContextCompat.checkSelfPermission(this, recordPerm) == granted) {
             return true
         }
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(Manifest.permission.RECORD_AUDIO),
-            audioPermission
-        )
+        ActivityCompat.requestPermissions(this, arrayOf(recordPerm), audioPermission)
         return false
     }
 
@@ -68,12 +71,11 @@ class MainActivity : AppCompatActivity(), OnSpeechEventListener, TTSListener {
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
+        val granted = PackageManager.PERMISSION_GRANTED
         // respond to the permission request's asynchronous result
         when (requestCode) {
             audioPermission -> {
-                if (grantResults.isNotEmpty() &&
-                    grantResults[0] == PackageManager.PERMISSION_GRANTED
-                ) {
+                if (grantResults.isNotEmpty() && grantResults[0] == granted) {
                     buildPipeline()
                 } else {
                     Log.w(logTag, "Record permission not granted; voice control disabled!")
@@ -95,12 +97,13 @@ class MainActivity : AppCompatActivity(), OnSpeechEventListener, TTSListener {
         // You don't need to worry about this step if you're not using TFLite for wakeword
         // detection (see the io.spokestack.spokestack.profile package for descriptions of
         // the various pre-configured profiles available).
+        // See the README for links to the original files.
         checkForModels()
 
         // Note that support for on-device ASR (which we're using here via an ".*AndroidASR"
         // profile) is device-dependent. You may wish to call
         // `SpeechRecognizer.isRecognitionAvailable(Context)` and use a different ASR if it is
-        // unavailable (or use on-device ASR only for demos).
+        // unavailable (or use Android-provided ASR only for demos).
         pipeline = SpeechPipeline.Builder()
             .useProfile("io.spokestack.spokestack.profile.TFWakewordAndroidASR")
             .setProperty("wake-detect-path", "$cacheDir/detect.lite")
@@ -131,25 +134,46 @@ class MainActivity : AppCompatActivity(), OnSpeechEventListener, TTSListener {
     }
 
     private fun modelsCached(): Boolean {
+        // We'll use the presence of one of the wakeword models as a proxy for everything being
+        // decompressed since we do it all in the same step. You may wish to be more thorough.
         val filterName = "filter.lite"
         val filterFile = File("$cacheDir/$filterName")
         return filterFile.exists()
     }
 
     private fun decompressModels() {
-        listOf("detect.lite", "encode.lite", "filter.lite").forEach(::cacheAsset)
+        listOf(
+            "detect.lite",
+            "encode.lite",
+            "filter.lite",
+            "nlu.tflite",
+            "metadata.json",
+            "vocab.txt"
+        ).forEach(::cacheAsset)
     }
 
-    private fun cacheAsset(modelName: String) {
-        val filterFile = File("$cacheDir/$modelName")
-        val inputStream = assets.open(modelName)
+    private fun cacheAsset(fileName: String) {
+        val cachedFile = File("$cacheDir/$fileName")
+        val inputStream = assets.open(fileName)
         val size = inputStream.available()
         val buffer = ByteArray(size)
         inputStream.read(buffer)
         inputStream.close()
-        val fos = FileOutputStream(filterFile)
+        val fos = FileOutputStream(cachedFile)
         fos.write(buffer)
         fos.close()
+    }
+
+    private fun buildNLU() {
+        if (this.nlu == null) {
+            this.nlu = TensorflowNLU.Builder()
+                .setProperty("nlu-model-path", "$cacheDir/nlu.tflite")
+                .setProperty("nlu-metadata-path", "$cacheDir/metadata.json")
+                .setProperty("wordpiece-vocab-path", "$cacheDir/vocab.txt")
+                .setProperty("trace-level", EventTracer.Level.DEBUG.value())
+                .addTraceListener(this)
+                .build()
+        }
     }
 
     private fun buildTTS() {
@@ -160,7 +184,7 @@ class MainActivity : AppCompatActivity(), OnSpeechEventListener, TTSListener {
                 // TTSListener
                 .setOutputClass("io.spokestack.spokestack.tts.SpokestackTTSOutput")
                 // demo Spokestack credentials; not guaranteed to work indefinitely
-                // see https://spokestack.io to get your own
+                // see https://spokestack.io/create to get your own
                 .setProperty("spokestack-id", "f0bc990c-e9db-4a0c-a2b1-6a6395a3d97e")
                 .setProperty(
                     "spokestack-secret",
@@ -216,7 +240,22 @@ class MainActivity : AppCompatActivity(), OnSpeechEventListener, TTSListener {
             TTSEvent.Type.ERROR -> Log.w(logTag, event.error)
             // If you're managing playback yourself, this is where you'd receive the URL to your
             // synthesized audio
-            TTSEvent.Type.AUDIO_AVAILABLE -> TODO()
+            TTSEvent.Type.AUDIO_AVAILABLE ->
+                Log.i(logTag, "Audio received: ${event.ttsResponse.audioUri}")
+            // If you want to restart ASR in anticipation of an immediate user response (for
+            // example, as a response to a question from the app), you'd call pipeline?.activate()
+            // here
+            TTSEvent.Type.PLAYBACK_COMPLETE -> Log.i(logTag, "TTS playback complete")
+        }
+    }
+
+    override fun onTrace(level: EventTracer.Level, message: String) {
+        when (level) {
+            EventTracer.Level.ERROR -> Log.e(logTag, message)
+            EventTracer.Level.DEBUG -> Log.d(logTag, message)
+            EventTracer.Level.INFO -> Log.i(logTag, message)
+            EventTracer.Level.WARN -> Log.w(logTag, message)
+            else -> Log.v(logTag, message)
         }
     }
 }
