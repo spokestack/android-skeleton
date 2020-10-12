@@ -1,4 +1,4 @@
 /build
 
-# wakeword models
-*.lite
+# assets - wakeword/nlu models
+/src/main/assets
