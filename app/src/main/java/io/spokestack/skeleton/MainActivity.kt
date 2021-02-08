@@ -81,7 +81,6 @@ class MainActivity : AppCompatActivity() {
                 "5BD5483F573D691A15CFA493C1782F451D4BD666E39A9E7B2EBE287E6A72C6B6"
             )
             .withAndroidContext(applicationContext)
-            .withLifecycle(lifecycle)
             // make sure we receive Spokestack events
             .addListener(listener)
             .build()
@@ -94,7 +93,7 @@ class MainActivity : AppCompatActivity() {
             val currentVersionCode = BuildConfig.VERSION_CODE
             val prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
             val savedVersionCode = prefs.getInt(versionKey, nonexistent)
-if (currentVersionCode != savedVersionCode) {
+            if (currentVersionCode != savedVersionCode) {
                 decompressModels()
 
                 // Update the shared preferences with the current version code
@@ -219,7 +218,7 @@ if (currentVersionCode != savedVersionCode) {
                 // example, as a response to a question from the app), you'd call pipeline?.activate()
                 // here
                 TTSEvent.Type.PLAYBACK_COMPLETE -> Log.i(logTag, "TTS playback complete")
-                null -> {
+                else -> {
                     // do nothing
                 }
             }
