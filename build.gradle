@@ -12,11 +12,9 @@ buildscript {
     repositories {
         mavenCentral()
         google()
-        jcenter()
-        
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.6.4'
+        classpath 'com.android.tools.build:gradle:4.2.0-alpha15'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
 
         // NOTE: Do not place your application dependencies here; they belong
@@ -28,7 +26,6 @@ allprojects {
     repositories {
         mavenCentral()
         google()
-        jcenter()
         // required for Azure speech; unnecessary otherwise
         maven {url 'https://csspeechstorage.blob.core.windows.net/maven/'}
     }
