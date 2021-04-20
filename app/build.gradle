@@ -48,7 +48,7 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
 
     // base Spokestack dependency
-    implementation 'io.spokestack:spokestack-android:11.1.0'
+    implementation "io.spokestack:spokestack-android:$spokestack_version"
 
     // Note: This project includes the optional dependencies required to use every external
     // service provider supported by Spokestack at the time of writing. They're labeled by
